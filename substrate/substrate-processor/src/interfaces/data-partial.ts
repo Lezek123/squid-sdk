@@ -58,3 +58,7 @@ export interface ArchiveBlock {
     calls?: ArchivePartialCall[]
     events?: ArchiveEvent[]
 }
+
+export interface RawArchiveBlock extends ArchiveBlock {
+    header: ArchiveBlockHeader & { height: number }
+}

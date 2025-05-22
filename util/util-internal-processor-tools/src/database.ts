@@ -3,6 +3,15 @@
  * and keeping the processor progress and status.
  */
 export type Database<S> = FinalDatabase<S> | HotDatabase<S>
+export type DatabaseWithStream<S> = FinalDatabase<S> & {
+    supportsStreaming: true
+    consumeRawMessages: (handler: (block: string) => Promise<void>) => Promise<void>
+}
+export type DatabaseWithoutStream<S> = Database<S> & { supportsStreaming?: false }
+
+export interface StreamStore {
+    pushBlock(block: { header: { height: number } }, onConfirmed?: () => void, onError?: (err: any) => void): void
+}
 
 
 export interface FinalTxInfo {

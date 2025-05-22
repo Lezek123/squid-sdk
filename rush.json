@@ -711,6 +711,12 @@
       "shouldPublish": true,
       "versionPolicyName": "npm"
     },
+        {
+      "packageName": "@subsquid/rabbitmq-store",
+      "projectFolder": "rabbitmq/rabbitmq-store",
+      "shouldPublish": true,
+      "versionPolicyName": "npm"
+    },
     {
       "packageName": "@subsquid/big-decimal",
       "projectFolder": "util/big-decimal",
@@ -905,6 +911,11 @@
     {
       "packageName": "balances",
       "projectFolder": "test/balances",
+      "shouldPublish": false
+    },
+        {
+      "packageName": "balances-stream",
+      "projectFolder": "test/balances-stream",
       "shouldPublish": false
     },
     {

@@ -1,0 +1,36 @@
+{
+  "name": "@subsquid/rabbitmq-store",
+  "version": "0.1.0",
+  "description": "RabbitMQ based message queue for SQD processors",
+  "license": "GPL-3.0-or-later",
+  "repository": "git@github.com:subsquid/squid.git",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "lib",
+    "src",
+    "!src/test"
+  ],
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "rm -rf lib && tsc"
+  },
+  "dependencies": {
+    "amqplib": "^0.10.8",
+    "@subsquid/util-internal": "^3.2.0",
+    "@subsquid/typeorm-config": "^4.1.1",
+    "@subsquid/logger": "^1.4.0"
+  },
+  "peerDependencies": {
+    "typeorm": "^0.3.17",
+    "@subsquid/big-decimal": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.10.7",
+    "@types/node": "^18.18.14",
+    "@types/pg": "^8.10.9",
+    "pg": "^8.11.3",
+    "typescript": "~5.5.4"
+  }
+}

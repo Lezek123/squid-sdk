@@ -1,0 +1,26 @@
+{
+  "name": "balances-stream",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "rm -rf lib && tsc"
+  },
+  "dependencies": {
+    "@subsquid/ss58": "^2.0.2",
+    "@subsquid/substrate-processor": "^8.6.0",
+    "@subsquid/substrate-runtime": "^2.0.1",
+    "@subsquid/rabbitmq-store": "^0.1.0",
+    "@subsquid/big-decimal": "^1.0.0",
+    "@subsquid/logger": "^1.4.0",
+    "dotenv": "^16.3.1",
+    "pg": "^8.11.3",
+    "typeorm": "^0.3.17"
+  },
+  "devDependencies": {
+    "@subsquid/substrate-metadata-explorer": "^3.2.0",
+    "@subsquid/substrate-typegen": "^8.1.0",
+    "@types/node": "^18.18.14",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.5.4"
+  }
+}

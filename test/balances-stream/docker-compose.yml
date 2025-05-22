@@ -1,0 +1,20 @@
+version: "3"
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT}:6379"
+  db:
+    image: postgres:12
+    environment:
+      POSTGRES_DB: "${DB_NAME}"
+      POSTGRES_USER: "${DB_USER}"
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "${DB_PORT}:5432"
+      
+  rabbitmq:
+    image: rabbitmq:latest
+    ports:
+      - "${AMQP_PORT}:5672"

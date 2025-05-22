@@ -13,7 +13,7 @@ import {
 } from '@subsquid/substrate-runtime/lib/metadata/old/typesBundle-polkadotjs'
 import {assertNotNull, def, runProgram} from '@subsquid/util-internal'
 import {ArchiveClient} from '@subsquid/util-internal-archive-client'
-import {Batch, Database, getOrGenerateSquidId, PrometheusServer, Runner} from '@subsquid/util-internal-processor-tools'
+import {Batch, DatabaseWithoutStream, DatabaseWithStream, getOrGenerateSquidId, PrometheusServer, Runner, StreamStore} from '@subsquid/util-internal-processor-tools'
 import {applyRangeBound, mergeRangeRequests, Range, RangeRequest} from '@subsquid/util-internal-range'
 import {cast} from '@subsquid/util-internal-validation'
 import assert from 'assert'
@@ -33,6 +33,7 @@ import {
     ReviveContractEmittedRequest
 } from './interfaces/data-request'
 import {getFieldSelectionValidator} from './selection'
+import { ArchiveBlock, RawArchiveBlock } from './interfaces/data-partial'
 
 
 export interface RpcEndpointSettings {
@@ -578,6 +579,26 @@ export class SubstrateBatchProcessor<F extends FieldSelection = {}> {
         })
     }
 
+    private async streamBatch<Store extends StreamStore>(store: Store, batch: Batch<RawArchiveBlock>) {
+        for (const block of batch.blocks) {
+            store.pushBlock(block)
+        }
+        this.getLogger().info(`Streamed ${batch.blocks.length} blocks. Awaiting confirmations from consumer...`)
+    }
+
+    public async comsume<Store>(db: DatabaseWithStream<Store>, handler: (block: Block<F>) => Promise<void>) {
+        db.consumeRawMessages(async (encodedBlock: string) => {
+            let archiveBlock: ArchiveBlock
+            try {
+                archiveBlock = JSON.parse(encodedBlock)
+            } catch(e) {
+                throw new Error(`Failed to decode JSON message: ${encodedBlock}`)
+            }
+            const [decoded] = await this.getArchiveDataSource().decodeBlocks([archiveBlock])
+            await handler(decoded as Block<F>)
+        })
+    }
+
     /**
      * Run data processing.
      *
@@ -590,7 +611,7 @@ export class SubstrateBatchProcessor<F extends FieldSelection = {}> {
      *
      * @param handler - The data handler, see {@link DataHandlerContext} for an API available to the handler.
      */
-    run<Store>(database: Database<Store>, handler: (ctx: DataHandlerContext<Store, F>) => Promise<void>): void {
+    run<Store>(database: DatabaseWithoutStream<Store>, handler: (ctx: DataHandlerContext<Store, F>) => Promise<void>): void {
         this.assertNotRunning()
         this.running = true
         let log = this.getLogger()
@@ -610,7 +631,49 @@ export class SubstrateBatchProcessor<F extends FieldSelection = {}> {
                 archive: this.archive == null ? undefined : this.getArchiveDataSource(),
                 hotDataSource: this.rpcIngestSettings?.disabled ? undefined : this.getRpcDataSource(),
                 allBlocksAreFinal: this.finalityConfirmation === 0,
-                process: (s, b) => this.processBatch(s, b as any, handler),
+                process: (s, b) => this.processBatch(s, b as Batch<Block<F>>, handler),
+                prometheus: this.prometheus,
+                log
+            }).run()
+        }, err => log.fatal(err))
+    }
+
+    /**
+     * Stream data into message broker sink.
+     *
+     * This method assumes full control over the current OS process as
+     * it terminates the entire program in case of error or
+     * at the end of data processing.
+     * 
+     * @param database - a "database" which provides an interface
+     * for streaming data into a message queue.
+     */
+    stream<Store extends StreamStore>(database: DatabaseWithStream<Store>): void {
+        this.assertNotRunning()
+        this.running = true
+        let log = this.getLogger()
+        runProgram(async () => {
+            if (this.rpcEndpoint == null) {
+                throw new Error('Chain RPC endpoint is always required. Use .setRpcEndpoint() to specify it.')
+            }
+            if (this.rpcIngestSettings?.disabled && this.archive == null) {
+                throw new Error(
+                    'Archive is required when RPC data ingestion is disabled. ' +
+                    'Use .setArchive() to specify it.'
+                )
+            }
+            const archive = this.getArchiveDataSource()
+            return new Runner({
+                database,
+                requests: this.getBatchRequests(),
+                archive: {
+                    getBlockHash: archive.getBlockHash.bind(archive),
+                    getFinalizedHeight: archive.getFinalizedHeight.bind(archive),
+                    getFinalizedBlocks: archive.getRawFinalizedBlocks.bind(archive)
+                },
+                hotDataSource: this.rpcIngestSettings?.disabled ? undefined : this.getRpcDataSource(),
+                allBlocksAreFinal: this.finalityConfirmation === 0,
+                process: (s, b) => this.streamBatch(s, b as Batch<RawArchiveBlock>),
                 prometheus: this.prometheus,
                 log
             }).run()

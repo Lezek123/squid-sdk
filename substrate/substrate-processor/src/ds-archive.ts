@@ -7,7 +7,7 @@ import {archiveIngest, assertIsValid, IsInvalid} from '@subsquid/util-internal-i
 import {Batch, DataSource} from '@subsquid/util-internal-processor-tools'
 import {mapRangeRequestList, RangeRequestList} from '@subsquid/util-internal-range'
 import {DEFAULT_FIELDS, FieldSelection} from './interfaces/data'
-import {ArchiveBlock, ArchiveBlockHeader} from './interfaces/data-partial'
+import {ArchiveBlock, ArchiveBlockHeader, RawArchiveBlock} from './interfaces/data-partial'
 import {DataRequest} from './interfaces/data-request'
 import {Block, BlockHeader, Call, Event, Extrinsic, setUpItems} from './mapping'
 
@@ -28,11 +28,18 @@ export class SubstrateArchive implements DataSource<Block, DataRequest> {
     private client: ArchiveClient
     private rpc: Rpc
     private typesBundle?:  OldTypesBundle | OldSpecsBundle
+    private runtimeTracker: RuntimeTracker<ArchiveBlockHeader & WithRuntime>
 
     constructor(options: SubstrateArchiveOptions) {
         this.client = options.client
         this.rpc = new Rpc(options.rpc)
         this.typesBundle = options.typesBundle
+        this.runtimeTracker = new RuntimeTracker<ArchiveBlockHeader & WithRuntime>(
+            this.rpc,
+            hdr => ({height: hdr.number, hash: hdr.hash, parentHash: hdr.parentHash}),
+            hdr => hdr,
+            this.typesBundle
+        )
     }
 
     getFinalizedHeight(): Promise<number> {
@@ -44,14 +51,15 @@ export class SubstrateArchive implements DataSource<Block, DataRequest> {
     }
 
     async *getFinalizedBlocks(requests: RangeRequestList<DataRequest>, stopOnHead?: boolean): AsyncIterable<Batch<Block>> {
+        for await (let { blocks, isHead } of this.getRawFinalizedBlocks(requests, stopOnHead)) {
+            yield {
+                blocks: await this.decodeBlocks(blocks),
+                isHead
+            }
+        }
+    }
 
-        let runtimeTracker = new RuntimeTracker<ArchiveBlockHeader & WithRuntime>(
-            this.rpc,
-            hdr => ({height: hdr.number, hash: hdr.hash, parentHash: hdr.parentHash}),
-            hdr => hdr,
-            this.typesBundle
-        )
-
+    async *getRawFinalizedBlocks(requests: RangeRequestList<DataRequest>, stopOnHead?: boolean): AsyncIterable<Batch<RawArchiveBlock>> {
         let archiveRequests = mapRangeRequestList(requests, req => {
             let {fields, ...items} = req
             let q: ArchiveQuery = {
@@ -67,15 +75,26 @@ export class SubstrateArchive implements DataSource<Block, DataRequest> {
             requests: archiveRequests,
             stopOnHead
         })) {
-            let headers: (ArchiveBlockHeader & IsInvalid)[] = blocks.map(b => b.header)
-            await runtimeTracker.setRuntime(headers)
-            assertIsValid(headers)
-
             yield {
-                blocks: blocks.map(b => this.mapBlock(b)),
+                blocks: blocks.map((b) => ({
+                    ...b,
+                    header: {
+                        ...b.header,
+                        height: b.header.number
+                    }
+                })),
                 isHead
             }
         }
+    }
+
+    
+
+    public async decodeBlocks(blocks: ArchiveBlock[]) {
+        let headers: (ArchiveBlockHeader & IsInvalid)[] = blocks.map(b => b.header)
+        await this.runtimeTracker.setRuntime(headers)
+        assertIsValid(headers)
+        return blocks.map(b => this.mapBlock(b))
     }
 
     @annotateSyncError((src: ArchiveBlock) => ({blockHeight: src.header.number, blockHash: src.header.hash}))
