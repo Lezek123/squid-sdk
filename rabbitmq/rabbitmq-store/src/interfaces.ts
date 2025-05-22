@@ -4,11 +4,8 @@ export interface HashAndHeight {
 }
 
 
-export interface DatabaseState {
-    height: number
-    hash: string
-    top: HashAndHeight[]
-    nonce: number
+export interface ConsumerState extends HashAndHeight {
+    // nonce: number
 }
 
 

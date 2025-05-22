@@ -3,8 +3,8 @@ import { ConfirmChannel } from 'amqplib'
 
 type RabbitMQStoreConfig = {
     channel: ConfirmChannel
-    queue: string
-    replyQueue: string
+    blocksQueue: string
+    onFirstSuccessfulPush?: () => Promise<void>
 }
 
 /**
@@ -12,23 +12,32 @@ type RabbitMQStoreConfig = {
  */
 export class Store {
     public readonly isStream = true
+    private pushedBlocks = 0
     constructor(private config: RabbitMQStoreConfig) {}
 
-    pushBlock(block: {
-        header: { height: number }
-    }, onConfirmed?: () => void, onError?: (err: any) => void) {
-        const { channel, queue, replyQueue } = this.config
-        channel.sendToQueue(queue, Buffer.from(JSON.stringify(block)), {
-            persistent: true,
-            contentType: 'application/json',
-            replyTo: replyQueue,
-            // TODO: Only possible because we don't process hot blocks!
-            correlationId: block.header.height.toString(),
-        }, (err, _ok) => {
-            if (err) {
-                return onError?.(err)
-            }
-            onConfirmed?.()
+    pushBlock(block: { header: { height: number } }): Promise<void> {
+        const { channel, blocksQueue, onFirstSuccessfulPush } = this.config
+        return new Promise((resolve, reject) => {
+            channel.sendToQueue(
+                blocksQueue,
+                Buffer.from(JSON.stringify(block)),
+                {
+                    persistent: true,
+                    contentType: 'application/json',
+                },
+                (err, _ok) => {
+                    if (err) {
+                        return reject(err)
+                    }
+                    ++this.pushedBlocks
+                    if (this.pushedBlocks == 1 && onFirstSuccessfulPush) {
+                        return onFirstSuccessfulPush()
+                            .then(resolve)
+                            .catch(reject)
+                    }
+                    resolve()
+                }
+            )
         })
     }
 }

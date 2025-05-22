@@ -581,9 +581,8 @@ export class SubstrateBatchProcessor<F extends FieldSelection = {}> {
 
     private async streamBatch<Store extends StreamStore>(store: Store, batch: Batch<RawArchiveBlock>) {
         for (const block of batch.blocks) {
-            store.pushBlock(block)
+            await store.pushBlock(block)
         }
-        this.getLogger().info(`Streamed ${batch.blocks.length} blocks. Awaiting confirmations from consumer...`)
     }
 
     public async comsume<Store>(db: DatabaseWithStream<Store>, handler: (block: Block<F>) => Promise<void>) {
@@ -596,6 +595,8 @@ export class SubstrateBatchProcessor<F extends FieldSelection = {}> {
             }
             const [decoded] = await this.getArchiveDataSource().decodeBlocks([archiveBlock])
             await handler(decoded as Block<F>)
+            const { hash, height } = decoded.header
+            return { hash, height }
         })
     }
 
