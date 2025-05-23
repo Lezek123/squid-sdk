@@ -49,7 +49,7 @@ export class RabbitMQDatabase {
                 this.log.debug('Block queue is empty.')
                 return
             }
-            await new Promise((resolve) => setInterval(resolve, 1000))
+            await new Promise((resolve) => setTimeout(resolve, 1000))
         }
     }
 
